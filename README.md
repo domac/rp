@@ -25,7 +25,7 @@ go rp.StartProfile(10029,"/tmp/prof.cpu", "/tmp/prof.mem")
 curl http://localhost:10029
 ```
 
-调用结束后，会生成相关的快照文件，可以用pprof工具进行检测
+调用结束后，会生成相关的快照文件,可以通过pprof工具进行检测
 
 pprof 获取方式：
 
