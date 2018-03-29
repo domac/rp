@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"runtime/pprof"
 	"sync"
 	"time"
@@ -38,6 +39,17 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func StartProfile(port int, cpuprofile, memprofile string, profileTime time.Duration) error {
+
+	wd, _ := os.Getwd()
+
+	if cpuprofile == "" {
+		cpuprofile = path.Join(wd, "debug_profile.cpu")
+	}
+
+	if memprofile == "" {
+		memprofile = path.Join(wd, "debug_profile.mem")
+	}
+
 	mux := &profileMux{
 		cpuProfile:  cpuprofile,
 		memProfile:  memprofile,
@@ -54,6 +66,7 @@ func StartProfile(port int, cpuprofile, memprofile string, profileTime time.Dura
 }
 
 func (p *profileMux) ProfileCPU(cpuprofile string, wg *sync.WaitGroup) {
+	log.Printf("cpu profile : %s\n", cpuprofile)
 	if cpuprofile != "" {
 		//检测cpu profile 配置
 		f, err := os.Create(cpuprofile)
@@ -74,6 +87,8 @@ func (p *profileMux) ProfileCPU(cpuprofile string, wg *sync.WaitGroup) {
 }
 
 func (p *profileMux) ProfileMEM(memprofile string, wg *sync.WaitGroup) {
+
+	log.Printf("memory profile : %s\n", memprofile)
 
 	if memprofile != "" {
 		//检测memory profile 配置
