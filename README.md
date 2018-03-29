@@ -1,7 +1,7 @@
 # rp
 runtime profile api
 
-简单的地runtime profile生成方式进行封装，主要用于项目的debug
+简单地对runtime profile生成方式进行封装，主要用于项目的debug
 
 生成快照后，可以用pprof工具进行相关性能检测：
 
