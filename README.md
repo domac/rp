@@ -14,7 +14,7 @@ go get -u -v github.com/domac/rp
 在相关项目代码中加入调用代码，例如：
 
 ```go
-go rp.StartProfile(10029,"/tmp/prof.cpu", "/tmp/prof.mem")
+go rp.StartProfile(10029,"/tmp/prof.cpu", "/tmp/prof.mem", 30*time.Second)
 ```
 
 ### 快照文件检测例子：

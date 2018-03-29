@@ -11,10 +11,11 @@ import (
 )
 
 type profileMux struct {
-	cpuProfile string
-	memProfile string
-	port       uint32
-	access     bool
+	cpuProfile  string
+	memProfile  string
+	port        uint32
+	access      bool
+	profileTime time.Duration
 }
 
 func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -26,8 +27,8 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var wg sync.WaitGroup
 		wg.Add(2)
 		p.access = false
-		go ProfileCPU(p.cpuProfile, &wg)
-		go ProfileMEM(p.memProfile, &wg)
+		go p.ProfileCPU(p.cpuProfile, &wg)
+		go p.ProfileMEM(p.memProfile, &wg)
 		wg.Wait()
 		p.access = true
 		return
@@ -36,12 +37,13 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func StartProfile(port int, cpuprofile, memprofile string) error {
+func StartProfile(port int, cpuprofile, memprofile string, profileTime time.Duration) error {
 	mux := &profileMux{
-		cpuProfile: cpuprofile,
-		memProfile: memprofile,
-		port:       uint32(port),
-		access:     true,
+		cpuProfile:  cpuprofile,
+		memProfile:  memprofile,
+		port:        uint32(port),
+		access:      true,
+		profileTime: profileTime,
 	}
 	ps := fmt.Sprintf(":%d", mux.port)
 	if err := http.ListenAndServe(ps, mux); err != nil {
@@ -51,7 +53,7 @@ func StartProfile(port int, cpuprofile, memprofile string) error {
 	return nil
 }
 
-func ProfileCPU(cpuprofile string, wg *sync.WaitGroup) {
+func (p *profileMux) ProfileCPU(cpuprofile string, wg *sync.WaitGroup) {
 	if cpuprofile != "" {
 		//检测cpu profile 配置
 		f, err := os.Create(cpuprofile)
@@ -60,7 +62,7 @@ func ProfileCPU(cpuprofile string, wg *sync.WaitGroup) {
 		}
 
 		pprof.StartCPUProfile(f)
-		time.AfterFunc(30*time.Second, func() {
+		time.AfterFunc(p.profileTime, func() {
 			pprof.StopCPUProfile()
 			f.Close()
 			log.Println("Stop cpu profiling after 30 seconds")
@@ -71,7 +73,7 @@ func ProfileCPU(cpuprofile string, wg *sync.WaitGroup) {
 	}
 }
 
-func ProfileMEM(memprofile string, wg *sync.WaitGroup) {
+func (p *profileMux) ProfileMEM(memprofile string, wg *sync.WaitGroup) {
 
 	if memprofile != "" {
 		//检测memory profile 配置
@@ -79,7 +81,7 @@ func ProfileMEM(memprofile string, wg *sync.WaitGroup) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		time.AfterFunc(30*time.Second, func() {
+		time.AfterFunc(p.profileTime, func() {
 			pprof.WriteHeapProfile(f)
 			f.Close()
 			log.Println("Stop memory profiling after 30 seconds")
