@@ -41,7 +41,6 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func StartProfile(port int, cpuprofile, memprofile string, profileTime time.Duration) error {
 
 	wd, _ := os.Getwd()
-
 	if cpuprofile == "" {
 		cpuprofile = path.Join(wd, "debug_profile.cpu")
 	}
@@ -57,11 +56,13 @@ func StartProfile(port int, cpuprofile, memprofile string, profileTime time.Dura
 		access:      true,
 		profileTime: profileTime,
 	}
-	ps := fmt.Sprintf(":%d", mux.port)
-	if err := http.ListenAndServe(ps, mux); err != nil {
-		log.Fatalf("Profile  Server Failed: %v", err)
-	}
 
+	go func(mux *profileMux) {
+		ps := fmt.Sprintf(":%d", mux.port)
+		if err := http.ListenAndServe(ps, mux); err != nil {
+			log.Fatalf("Profile  Server Failed: %v", err)
+		}
+	}(mux)
 	return nil
 }
 
