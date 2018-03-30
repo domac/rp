@@ -31,6 +31,8 @@ curl http://localhost:10029
 
 调用结束后，会生成相关的快照文件,可以通过pprof工具进行检测
 
+> 在使用官方的pprof前, 请先在安装 [Graphviz](https://www.graphviz.org/download/)
+
 pprof 获取方式：
 
 ```
