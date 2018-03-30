@@ -18,7 +18,7 @@ rp.StartProfile(10029,"/tmp/prof.cpu", "/tmp/prof.mem", 30*time.Second)
 
 或直接
 
-rp.CreateProfile(1)
+rp.CreateProfile(rp.MODE_DEBUG_PROFILE_CPU)
 ```
 
 ### 快照文件检测例子：
