@@ -16,7 +16,13 @@ import (
 	"time"
 )
 
-const DEFAULT_PORT = 10029 //默认端口
+const (
+	DEFAULT_PORT = 10029 //默认端口
+
+	MODE_DEBUG_PROFILE_CPU    = 1
+	MODE_DEBUG_PROFILE_MEMORY = 2
+	MODE_DEBUG_PROFILE_ALL    = 3
+)
 
 type RpConfig struct {
 	DebugProfile DebugProfile `toml:"debug_profile"`
@@ -77,11 +83,13 @@ func CreateProfile(mode int) error {
 	cpuprofile := ""
 	memprofile := ""
 
-	if mode == 1 || mode == 3 {
+	if mode == MODE_DEBUG_PROFILE_CPU ||
+		mode == MODE_DEBUG_PROFILE_ALL {
 		cpuprofile = path.Join(wd, "debug_profile.cpu")
 	}
 
-	if mode == 2 || mode == 3 {
+	if mode == MODE_DEBUG_PROFILE_MEMORY ||
+		mode == MODE_DEBUG_PROFILE_ALL {
 		memprofile = path.Join(wd, "debug_profile.mem")
 	}
 
@@ -97,11 +105,13 @@ func CreateProfile(mode int) error {
 					os.MkdirAll(g_rpconfig.DebugProfile.ProfileOutpuDir, 0777)
 
 					if cpuprofile != "" {
-						cpuprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir, name+"_debug_profile_cpu.prof")
+						cpuprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
+							name+"_debug_profile_cpu.prof")
 					}
 
 					if memprofile != "" {
-						memprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir, name+"_debug_profile_mem.prof")
+						memprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
+							name+"_debug_profile_mem.prof")
 					}
 				}
 			}
