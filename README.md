@@ -15,6 +15,10 @@ go get -u -v github.com/domac/rp
 
 ```go
 rp.StartProfile(10029,"/tmp/prof.cpu", "/tmp/prof.mem", 30*time.Second)
+
+或直接
+
+rp.CreateProfile(1)
 ```
 
 ### 快照文件检测例子：

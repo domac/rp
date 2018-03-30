@@ -85,8 +85,6 @@ func CreateProfile(mode int) error {
 		memprofile = path.Join(wd, "debug_profile.mem")
 	}
 
-	//LoadDebugProfile("/Users/lihaoquan/GoProjects/Playground/src/github.com/domac/rp/rp.conf")
-
 	if g_rpconfig != nil {
 		for idx, name := range g_rpconfig.DebugProfile.ModuleNames {
 			if strings.Contains(callerFileName, name) &&
