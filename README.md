@@ -21,6 +21,16 @@ rp.StartProfile(10029,"/tmp/prof.cpu", "/tmp/prof.mem", 30*time.Second)
 rp.CreateProfile(rp.MODE_DEBUG_PROFILE_CPU)
 ```
 
+使用配置文件
+
+```
+rp.LoadDebugProfile("/path/to/config/file")
+
+rp.StartProfile(10029,"/tmp/prof.cpu", "/tmp/prof.mem", 30*time.Second)
+```
+
+配置文件可根据配置的项目名定义调用的端口,主要用于单台机器上启动多个profile服务的场景
+
 ### 快照文件检测例子：
 
 程序运行过程中，调用 rp 的开发api
