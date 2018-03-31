@@ -31,6 +31,15 @@ rp.StartProfile(10029,"/tmp/prof.cpu", "/tmp/prof.mem", 30*time.Second)
 
 如使用配置,则根据配置的项目名定义调用的端口,主要用于单台机器上启动多个profile服务的场景
 
+配置文件格式:
+
+```
+[debug_profile]
+module_ports = [7000,7001,7002]
+module_names = ["test","ppdemo","domac"]
+profile_output_dir = "../ppdemo/pdata"
+```
+
 ### 快照文件检测例子：
 
 程序运行过程中，调用 rp 的开发api
