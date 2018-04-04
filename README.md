@@ -16,8 +16,7 @@ go get -u -v github.com/domac/rp
 ```go
 rp.CreateProfile()
 ```
-
-### 使用配置文件
+使用配置文件
 
 ```
 rp.LoadDebugProfile("/path/to/config/file")
