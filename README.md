@@ -43,7 +43,9 @@ profile_output_dir = "../ppdemo/pdata"
 curl http://localhost:10029
 ```
 
-上面的请求会同时产生所有的性能profile文件,若只想生成特定的性能快照,可以参考如下:
+上面的请求会同时产生
+
+所有的性能profile文件,若只想生成特定的性能快照,可以参考如下:
 
 ```
 生成CPU快照
