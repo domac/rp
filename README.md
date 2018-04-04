@@ -14,14 +14,10 @@ go get -u -v github.com/domac/rp
 在相关项目代码中加入调用代码，例如：
 
 ```go
-rp.StartProfile(10029,"/tmp/prof.cpu", "/tmp/prof.mem", 30*time.Second)
-
-或直接
-
-rp.CreateProfile(rp.MODE_DEBUG_PROFILE_CPU)
+rp.CreateProfile()
 ```
 
-使用配置文件
+可以配合使用配置文件
 
 ```
 rp.LoadDebugProfile("/path/to/config/file")
@@ -46,6 +42,22 @@ profile_output_dir = "../ppdemo/pdata"
 
 ```
 curl http://localhost:10029
+```
+
+上面的请求会同时生成所有的性能分析文件,若只想生成特定的性能快照,可以参考如下:
+
+```
+生成CPU快照
+curl http://localhost:10029?mode=1
+
+生成MOMERY快照
+curl http://localhost:10029?mode=2
+
+生成BLOCK快照
+curl http://localhost:10029?mode=3
+
+生成TRACE快照
+curl http://localhost:10029?mode=4
 ```
 
 调用结束后，会生成相关的快照文件,可以通过pprof工具进行检测

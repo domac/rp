@@ -10,6 +10,8 @@ import (
 	"path"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,9 +21,13 @@ import (
 const (
 	DEFAULT_PORT = 10029 //默认端口
 
+	MODE_DEBUG_PROFILE_ALL    = 0
 	MODE_DEBUG_PROFILE_CPU    = 1
 	MODE_DEBUG_PROFILE_MEMORY = 2
-	MODE_DEBUG_PROFILE_ALL    = 3
+	MODE_DEBUG_PROFILE_BLOCK  = 3
+	MODE_DEBUG_PROFILE_TRACE  = 4
+
+	memProfileRate = 4096
 )
 
 type RpConfig struct {
@@ -37,27 +43,49 @@ type DebugProfile struct {
 var g_rpconfig = new(RpConfig)
 
 type profileMux struct {
-	cpuProfile  string
-	memProfile  string
-	port        uint32
-	started     uint32
-	profileTime time.Duration
+	cpuProfile   string
+	memProfile   string
+	blockProfile string
+	traceProfile string
+	port         uint32
+	started      uint32
+	profileTime  time.Duration
 }
 
 //debug服务
 func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/rp" {
 
+	//调用模式
+	modestr := r.URL.Query().Get("mode")
+	mode, _ := strconv.Atoi(modestr)
+	log.Printf("debug mode = %d", mode)
+
+	if r.URL.Path == "/rp" {
 		if !atomic.CompareAndSwapUint32(&p.started, 0, 1) {
 			log.Printf("profile already called")
 			return
 		}
-
 		var wg sync.WaitGroup
-		wg.Add(2)
 		atomic.StoreUint32(&p.started, 1)
-		go p.ProfileCPU(p.cpuProfile, &wg)
-		go p.ProfileMEM(p.memProfile, &wg)
+		if mode == MODE_DEBUG_PROFILE_ALL || mode == MODE_DEBUG_PROFILE_CPU {
+			wg.Add(1)
+			go p.ProfileCPU(p.cpuProfile, &wg)
+		}
+
+		if mode == MODE_DEBUG_PROFILE_ALL || mode == MODE_DEBUG_PROFILE_MEMORY {
+			wg.Add(1)
+			go p.ProfileMEM(p.memProfile, &wg)
+		}
+
+		if mode == MODE_DEBUG_PROFILE_ALL || mode == MODE_DEBUG_PROFILE_BLOCK {
+			wg.Add(1)
+			go p.ProfileBlock(p.blockProfile, &wg)
+		}
+
+		if mode == MODE_DEBUG_PROFILE_ALL || mode == MODE_DEBUG_PROFILE_TRACE {
+			wg.Add(1)
+			go p.ProfileTrace(p.traceProfile, &wg)
+		}
 		wg.Wait()
 		atomic.StoreUint32(&p.started, 0)
 		w.Header().Set("Content-type", "text/html")
@@ -69,7 +97,7 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 //默认创建快照方式
-func CreateProfile(mode int) error {
+func CreateProfile() error {
 	_, callerFileName, _, _ := runtime.Caller(1)
 	srcIndex := strings.LastIndex(callerFileName, "src")
 	if srcIndex > 0 {
@@ -82,16 +110,13 @@ func CreateProfile(mode int) error {
 	wd, _ := os.Getwd()
 	cpuprofile := ""
 	memprofile := ""
+	blockprofile := ""
+	traceprofile := ""
 
-	if mode == MODE_DEBUG_PROFILE_CPU ||
-		mode == MODE_DEBUG_PROFILE_ALL {
-		cpuprofile = path.Join(wd, "debug_profile.cpu")
-	}
-
-	if mode == MODE_DEBUG_PROFILE_MEMORY ||
-		mode == MODE_DEBUG_PROFILE_ALL {
-		memprofile = path.Join(wd, "debug_profile.mem")
-	}
+	cpuprofile = path.Join(wd, "debug_profile.cpu")
+	memprofile = path.Join(wd, "debug_profile.mem")
+	blockprofile = path.Join(wd, "debug_profile.block")
+	traceprofile = path.Join(wd, "debug_profile.trace")
 
 	if g_rpconfig != nil {
 		for idx, name := range g_rpconfig.DebugProfile.ModuleNames {
@@ -113,21 +138,33 @@ func CreateProfile(mode int) error {
 						memprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
 							name+"_debug_profile_mem.prof")
 					}
+
+					if blockprofile != "" {
+						blockprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
+							name+"_debug_profile_block.prof")
+					}
+
+					if traceprofile != "" {
+						traceprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
+							name+"_debug_profile_trace.prof")
+					}
 				}
 			}
 		}
 	}
-
-	return StartProfile(port, cpuprofile, memprofile, 30*time.Second)
+	//开始profile
+	return StartProfile(port, cpuprofile, memprofile, blockprofile, traceprofile, 30*time.Second)
 }
 
-func StartProfile(port int, cpuprofile, memprofile string, profileTime time.Duration) error {
+func StartProfile(port int, cpuprofile, memprofile, blockProfile, traceprofile string, profileTime time.Duration) error {
 	//获取调用者的标准文件名称
 	mux := &profileMux{
-		cpuProfile:  cpuprofile,
-		memProfile:  memprofile,
-		port:        uint32(port),
-		profileTime: profileTime,
+		cpuProfile:   cpuprofile,
+		memProfile:   memprofile,
+		blockProfile: blockProfile,
+		traceProfile: traceprofile,
+		port:         uint32(port),
+		profileTime:  profileTime,
 	}
 
 	go func(mux *profileMux) {
@@ -146,13 +183,13 @@ func (p *profileMux) ProfileCPU(cpuprofile string, wg *sync.WaitGroup) {
 		//检测cpu profile 配置
 		f, err := os.Create(cpuprofile)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("profile: could not create cpu profile %q: %v", cpuprofile, err)
 		}
 		pprof.StartCPUProfile(f)
 		time.AfterFunc(p.profileTime, func() {
 			pprof.StopCPUProfile()
 			f.Close()
-			log.Println("Stop cpu profiling after 30 seconds")
+			log.Println("cpu profiling finish")
 			wg.Done()
 		})
 	} else {
@@ -166,12 +203,16 @@ func (p *profileMux) ProfileMEM(memprofile string, wg *sync.WaitGroup) {
 		//检测memory profile 配置
 		f, err := os.Create(memprofile)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("profile: could not create memory profile %q: %v", memprofile, err)
 		}
+
+		old := runtime.MemProfileRate
+		runtime.MemProfileRate = memProfileRate
 		time.AfterFunc(p.profileTime, func() {
-			pprof.WriteHeapProfile(f)
+			pprof.Lookup("heap").WriteTo(f, 0)
 			f.Close()
-			log.Println("Stop memory profiling after 30 seconds")
+			runtime.MemProfileRate = old
+			log.Println("memory profiling finish")
 			wg.Done()
 		})
 	} else {
@@ -179,6 +220,42 @@ func (p *profileMux) ProfileMEM(memprofile string, wg *sync.WaitGroup) {
 	}
 }
 
+func (p *profileMux) ProfileBlock(blockfile string, wg *sync.WaitGroup) {
+	log.Printf("block profile : %s\n", blockfile)
+	if blockfile != "" {
+		f, err := os.Create(blockfile)
+		if err != nil {
+			log.Fatalf("profile: could not create block profile %q: %v", blockfile, err)
+		}
+		runtime.SetBlockProfileRate(1)
+		time.AfterFunc(p.profileTime, func() {
+			pprof.Lookup("block").WriteTo(f, 0)
+			f.Close()
+			runtime.SetBlockProfileRate(0)
+			log.Println("block profiling finish")
+			wg.Done()
+		})
+	}
+}
+
+func (p *profileMux) ProfileTrace(tracefile string, wg *sync.WaitGroup) {
+	log.Printf("trace profile : %s\n", tracefile)
+	if tracefile != "" {
+		f, err := os.Create(tracefile)
+		if err != nil {
+			log.Fatalf("profile: could not create trace profile %q: %v", tracefile, err)
+		}
+		trace.Start(f)
+		time.AfterFunc(p.profileTime, func() {
+			trace.Stop()
+			f.Close()
+			log.Println("trace profiling finish")
+			wg.Done()
+		})
+	}
+}
+
+//加载debug配置
 func LoadDebugProfile(path string) {
 	_, err := toml.DecodeFile(path, &g_rpconfig)
 	if err != nil {
