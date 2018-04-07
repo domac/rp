@@ -16,6 +16,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"context"
 )
 
 const (
@@ -50,6 +51,7 @@ type profileMux struct {
 	port         uint32
 	started      uint32
 	profileTime  time.Duration
+	ctx          context.Context
 }
 
 //debug服务
@@ -156,6 +158,26 @@ func CreateProfile() error {
 	return StartProfile(port, cpuprofile, memprofile, blockprofile, traceprofile, 30*time.Second)
 }
 
+func StartProfileWithContxt(port int, cpuprofile, memprofile, blockProfile, traceprofile string, ctx context.Context) error {
+	mux := &profileMux{
+		cpuProfile:   cpuprofile,
+		memProfile:   memprofile,
+		blockProfile: blockProfile,
+		traceProfile: traceprofile,
+		port:         uint32(port),
+		ctx:          ctx,
+	}
+
+	go func(mux *profileMux) {
+		ps := fmt.Sprintf(":%d", mux.port)
+		log.Printf("debug profile call [contxt]: http://127.0.0.1%s/rp\n", ps)
+		if err := http.ListenAndServe(ps, mux); err != nil {
+			log.Fatalf("Profile  Server Failed: %v", err)
+		}
+	}(mux)
+	return nil
+}
+
 func StartProfile(port int, cpuprofile, memprofile, blockProfile, traceprofile string, profileTime time.Duration) error {
 	//获取调用者的标准文件名称
 	mux := &profileMux{
@@ -186,12 +208,21 @@ func (p *profileMux) ProfileCPU(cpuprofile string, wg *sync.WaitGroup) {
 			log.Fatalf("profile: could not create cpu profile %q: %v", cpuprofile, err)
 		}
 		pprof.StartCPUProfile(f)
-		time.AfterFunc(p.profileTime, func() {
+
+		if p.ctx == nil {
+			time.AfterFunc(p.profileTime, func() {
+				pprof.StopCPUProfile()
+				f.Close()
+				log.Println("cpu profiling finish")
+				wg.Done()
+			})
+		} else {
+			<-p.ctx.Done()
 			pprof.StopCPUProfile()
 			f.Close()
-			log.Println("cpu profiling finish")
+			log.Println("[contxt] cpu profiling finish")
 			wg.Done()
-		})
+		}
 	} else {
 		wg.Done()
 	}
@@ -246,12 +277,22 @@ func (p *profileMux) ProfileTrace(tracefile string, wg *sync.WaitGroup) {
 			log.Fatalf("profile: could not create trace profile %q: %v", tracefile, err)
 		}
 		trace.Start(f)
-		time.AfterFunc(p.profileTime, func() {
+
+		if p.ctx == nil {
+			time.AfterFunc(p.profileTime, func() {
+				trace.Stop()
+				f.Close()
+				log.Println("trace profiling finish")
+				wg.Done()
+			})
+		} else {
+			<-p.ctx.Done()
 			trace.Stop()
 			f.Close()
-			log.Println("trace profiling finish")
+			log.Println("[context]trace profiling finish")
 			wg.Done()
-		})
+		}
+
 	}
 }
 
