@@ -56,13 +56,29 @@ type profileMux struct {
 	ctx          context.Context
 }
 
+func isInclude(list []string, element int) bool {
+	for _, v := range list {
+		vi, err := strconv.Atoi(v)
+		if err != nil {
+			continue
+		}
+		if element == vi {
+			return true
+		}
+	}
+	return false
+}
+
 //debug服务
 func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	//调用模式
 	modestr := r.URL.Query().Get("mode")
-	mode, _ := strconv.Atoi(modestr)
-	log.Printf("debug mode = %d", mode)
+
+	modes := strings.Split(modestr, ",")
+
+	//mode, _ := strconv.Atoi(modestr)
+	log.Printf("debug mode = %s\n", modes)
 
 	if r.URL.Path == "/rp" {
 		if !atomic.CompareAndSwapUint32(&p.started, 0, 1) {
@@ -71,22 +87,22 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		var wg sync.WaitGroup
 		atomic.StoreUint32(&p.started, 1)
-		if mode == MODE_DEBUG_PROFILE_ALL || mode == MODE_DEBUG_PROFILE_CPU {
+		if isInclude(modes, MODE_DEBUG_PROFILE_CPU) {
 			wg.Add(1)
 			go p.ProfileCPU(p.cpuProfile, &wg)
 		}
 
-		if mode == MODE_DEBUG_PROFILE_ALL || mode == MODE_DEBUG_PROFILE_MEMORY {
+		if isInclude(modes, MODE_DEBUG_PROFILE_MEMORY) {
 			wg.Add(1)
 			go p.ProfileMEM(p.memProfile, &wg)
 		}
 
-		if mode == MODE_DEBUG_PROFILE_ALL || mode == MODE_DEBUG_PROFILE_BLOCK {
+		if isInclude(modes, MODE_DEBUG_PROFILE_BLOCK) {
 			wg.Add(1)
 			go p.ProfileBlock(p.blockProfile, &wg)
 		}
 
-		if mode == MODE_DEBUG_PROFILE_ALL || mode == MODE_DEBUG_PROFILE_TRACE {
+		if isInclude(modes, MODE_DEBUG_PROFILE_TRACE) {
 			wg.Add(1)
 			go p.ProfileTrace(p.traceProfile, &wg)
 		}
