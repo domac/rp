@@ -1,6 +1,7 @@
 package rp
 
 import (
+	"context"
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"io"
@@ -16,7 +17,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"context"
 )
 
 const (
@@ -39,6 +39,7 @@ type DebugProfile struct {
 	ModulePorts     []int    `toml:"module_ports"`
 	ModuleNames     []string `toml:"module_names"`
 	ProfileOutpuDir string   `toml:"profile_output_dir"`
+	ProfileSeconds  int      `toml:"profile_seconds"`
 }
 
 var g_rpconfig = new(RpConfig)
@@ -89,6 +90,7 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			go p.ProfileTrace(p.traceProfile, &wg)
 		}
 		wg.Wait()
+		log.Println("profile task done !")
 		atomic.StoreUint32(&p.started, 0)
 		w.Header().Set("Content-type", "text/html")
 		io.WriteString(w, "profile finish\r\n")
@@ -114,6 +116,7 @@ func CreateProfile() error {
 	memprofile := ""
 	blockprofile := ""
 	traceprofile := ""
+	profileTimeSeconds := 30 * time.Second
 
 	cpuprofile = path.Join(wd, "debug_profile.cpu")
 	memprofile = path.Join(wd, "debug_profile.mem")
@@ -150,12 +153,17 @@ func CreateProfile() error {
 						traceprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
 							name+"_debug_profile_trace.prof")
 					}
+
+					if g_rpconfig.DebugProfile.ProfileSeconds > 0 {
+						log.Printf("debug profile seconds : %d\n", g_rpconfig.DebugProfile.ProfileSeconds)
+						profileTimeSeconds = time.Duration(g_rpconfig.DebugProfile.ProfileSeconds) * time.Second
+					}
 				}
 			}
 		}
 	}
 	//开始profile
-	return StartProfile(port, cpuprofile, memprofile, blockprofile, traceprofile, 30*time.Second)
+	return StartProfile(port, cpuprofile, memprofile, blockprofile, traceprofile, profileTimeSeconds)
 }
 
 func StartProfileWithContxt(port int, cpuprofile, memprofile, blockProfile, traceprofile string, ctx context.Context) error {
@@ -191,7 +199,7 @@ func StartProfile(port int, cpuprofile, memprofile, blockProfile, traceprofile s
 
 	go func(mux *profileMux) {
 		ps := fmt.Sprintf(":%d", mux.port)
-		log.Printf("debug profile call : http://127.0.0.1%s/rp\n", ps)
+		log.Printf("debug profile call : http://127.0.0.1%s/rp?mode=1\n", ps)
 		if err := http.ListenAndServe(ps, mux); err != nil {
 			log.Fatalf("Profile  Server Failed: %v", err)
 		}
@@ -239,13 +247,23 @@ func (p *profileMux) ProfileMEM(memprofile string, wg *sync.WaitGroup) {
 
 		old := runtime.MemProfileRate
 		runtime.MemProfileRate = memProfileRate
-		time.AfterFunc(p.profileTime, func() {
+
+		if p.ctx == nil {
+			time.AfterFunc(p.profileTime, func() {
+				pprof.Lookup("heap").WriteTo(f, 0)
+				f.Close()
+				runtime.MemProfileRate = old
+				log.Println("memory profiling finish")
+				wg.Done()
+			})
+		} else {
+			<-p.ctx.Done()
 			pprof.Lookup("heap").WriteTo(f, 0)
 			f.Close()
 			runtime.MemProfileRate = old
-			log.Println("memory profiling finish")
+			log.Println("[context] memory profiling finish")
 			wg.Done()
-		})
+		}
 	} else {
 		wg.Done()
 	}
@@ -259,13 +277,25 @@ func (p *profileMux) ProfileBlock(blockfile string, wg *sync.WaitGroup) {
 			log.Fatalf("profile: could not create block profile %q: %v", blockfile, err)
 		}
 		runtime.SetBlockProfileRate(1)
-		time.AfterFunc(p.profileTime, func() {
+
+		if p.ctx == nil {
+			time.AfterFunc(p.profileTime, func() {
+				pprof.Lookup("block").WriteTo(f, 0)
+				f.Close()
+				runtime.SetBlockProfileRate(0)
+				log.Println("block profiling finish")
+				wg.Done()
+			})
+		} else {
+			<-p.ctx.Done()
 			pprof.Lookup("block").WriteTo(f, 0)
 			f.Close()
 			runtime.SetBlockProfileRate(0)
-			log.Println("block profiling finish")
+			log.Println("[context] block profiling finish")
 			wg.Done()
-		})
+		}
+	} else {
+		wg.Done()
 	}
 }
 
@@ -292,7 +322,8 @@ func (p *profileMux) ProfileTrace(tracefile string, wg *sync.WaitGroup) {
 			log.Println("[context]trace profiling finish")
 			wg.Done()
 		}
-
+	} else {
+		wg.Done()
 	}
 }
 
