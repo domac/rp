@@ -1,6 +1,7 @@
 package rp
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"github.com/BurntSushi/toml"
@@ -332,5 +333,31 @@ func LoadDebugProfile(path string) {
 	_, err := toml.DecodeFile(path, &g_rpconfig)
 	if err != nil {
 		log.Println(err.Error())
+	}
+}
+
+func DoTrace() func() {
+	traceprofile := "./trace.out"
+	bw, flush := bufferedFileWriter(traceprofile)
+	trace.Start(bw)
+	return func() {
+		flush()
+		trace.Stop()
+	}
+}
+
+func bufferedFileWriter(dest string) (w io.Writer, close func()) {
+	f, err := os.Create(dest)
+	if err != nil {
+		log.Fatal(err)
+	}
+	bw := bufio.NewWriter(f)
+	return bw, func() {
+		if err := bw.Flush(); err != nil {
+			log.Fatalf("error flushing %v: %v", dest, err)
+		}
+		if err := f.Close(); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
