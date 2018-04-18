@@ -118,7 +118,7 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 //默认创建快照方式
-func CreateProfile() error {
+func DEBUG_PROFILE() error {
 	_, callerFileName, _, _ := runtime.Caller(1)
 	srcIndex := strings.LastIndex(callerFileName, "src")
 	if srcIndex > 0 {

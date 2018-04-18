@@ -14,13 +14,13 @@ go get -u -v github.com/domac/rp
 在相关项目代码中加入调用代码，例如：
 
 ```go
-rp.CreateProfile()
+rp.DEBUG_PROFILE()
 ```
 使用配置文件
 
 ```
 rp.LoadDebugProfile("/path/to/config/file")
-rp.CreateProfile()
+rp.DEBUG_PROFILE()
 ```
 
 如使用配置,则根据配置的项目名定义调用的端口,主要用于单台机器上启动多个profile服务的场景
