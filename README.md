@@ -77,6 +77,8 @@ curl http://localhost:10029/rp?mode=3
 curl http://localhost:10029/rp?mode=4
 ```
 
+> trace文件，需要使用命令 go tool trace xxxx 进行查看
+
 调用结束后，会生成相关的快照文件,可以通过pprof工具进行检测
 
 > 在使用官方的pprof前, 请先在安装 [Graphviz](https://www.graphviz.org/download/)
@@ -93,6 +95,14 @@ go get -u -v https://github.com/google/pprof
 pprof -http=:8000 prof.cpu
 ```
 
+调用图
+
 ![p1](http://og0usnhfv.bkt.clouddn.com/p1.png)
 
+火焰图
+
 ![p2](http://og0usnhfv.bkt.clouddn.com/p2.png)
+
+runtime运行时trace图
+
+![p3](http://og0usnhfv.bkt.clouddn.com/trace.png)
