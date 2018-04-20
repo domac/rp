@@ -3,13 +3,16 @@ package rp
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"io"
+	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
@@ -21,8 +24,6 @@ import (
 )
 
 const (
-	DEFAULT_PORT = 10029 //默认端口
-
 	MODE_DEBUG_PROFILE_ALL    = 0
 	MODE_DEBUG_PROFILE_CPU    = 1
 	MODE_DEBUG_PROFILE_MEMORY = 2
@@ -32,18 +33,20 @@ const (
 	memProfileRate = 4096
 )
 
-type RpConfig struct {
-	DebugProfile DebugProfile `toml:"debug_profile"`
+type RpSetupConfig struct {
+	Name    string                 `json:"name"`
+	Modules []RpSetupConfigModules `json:"modules"`
+	isUsed  bool
 }
 
-type DebugProfile struct {
-	ModulePorts     []int    `toml:"module_ports"`
-	ModuleNames     []string `toml:"module_names"`
-	ProfileOutpuDir string   `toml:"profile_output_dir"`
-	ProfileSeconds  int      `toml:"profile_seconds"`
+type RpSetupConfigModules struct {
+	ModuleName         string `json:"module_name"`
+	ProfileServicePort int    `json:"profile_service_port"`
+	ProfileOutputDir   string `json:"profile_output_dir"`
+	ProfileSeconds     int    `json:"profile_seconds"`
 }
 
-var g_rpconfig = new(RpConfig)
+var _setupConfig = new(RpSetupConfig)
 
 type profileMux struct {
 	cpuProfile   string
@@ -83,6 +86,8 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/rp" {
 		if !atomic.CompareAndSwapUint32(&p.started, 0, 1) {
 			log.Printf("profile already called")
+			w.Header().Set("Content-type", "text/html")
+			io.WriteString(w, "profile service already called\r\n")
 			return
 		}
 		var wg sync.WaitGroup
@@ -126,7 +131,9 @@ func DEBUG_PROFILE() error {
 	}
 	log.Printf("caller file : %s\n", callerFileName)
 
-	port := DEFAULT_PORT
+	//随机分配端口
+	port := GenerateRangePort(7000, 9999)
+
 	//获取当前的工作目录
 	wd, _ := os.Getwd()
 	cpuprofile := ""
@@ -140,45 +147,40 @@ func DEBUG_PROFILE() error {
 	blockprofile = path.Join(wd, "debug_profile.block")
 	traceprofile = path.Join(wd, "debug_profile.trace")
 
-	if g_rpconfig != nil {
-		for idx, name := range g_rpconfig.DebugProfile.ModuleNames {
-			if strings.Contains(callerFileName, name) &&
-				len(g_rpconfig.DebugProfile.ModulePorts) > idx {
-				port = g_rpconfig.DebugProfile.ModulePorts[idx]
+	log.Printf("[RM]ready to load config : %s\n", _setupConfig.Name)
+	for _, modlue := range _setupConfig.Modules {
+		name := modlue.ModuleName
+		if strings.Contains(callerFileName, name) {
+			port = modlue.ProfileServicePort
+			output := modlue.ProfileOutputDir
+			if output != "" {
 
-				//如果是配置的模块名,则重新设置输出文件名称
-				if g_rpconfig.DebugProfile.ProfileOutpuDir != "" {
+				os.MkdirAll(output, os.ModePerm)
 
-					os.MkdirAll(g_rpconfig.DebugProfile.ProfileOutpuDir, 0777)
+				if cpuprofile != "" {
+					cpuprofile = path.Join(output, name+"_debug_profile_cpu.prof")
+				}
 
-					if cpuprofile != "" {
-						cpuprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
-							name+"_debug_profile_cpu.prof")
-					}
+				if memprofile != "" {
+					memprofile = path.Join(output, name+"_debug_profile_mem.prof")
+				}
 
-					if memprofile != "" {
-						memprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
-							name+"_debug_profile_mem.prof")
-					}
+				if blockprofile != "" {
+					blockprofile = path.Join(output, name+"_debug_profile_block.prof")
+				}
 
-					if blockprofile != "" {
-						blockprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
-							name+"_debug_profile_block.prof")
-					}
+				if traceprofile != "" {
+					traceprofile = path.Join(output, name+"_debug_profile_trace.prof")
+				}
 
-					if traceprofile != "" {
-						traceprofile = path.Join(g_rpconfig.DebugProfile.ProfileOutpuDir,
-							name+"_debug_profile_trace.prof")
-					}
-
-					if g_rpconfig.DebugProfile.ProfileSeconds > 0 {
-						log.Printf("debug profile seconds : %d\n", g_rpconfig.DebugProfile.ProfileSeconds)
-						profileTimeSeconds = time.Duration(g_rpconfig.DebugProfile.ProfileSeconds) * time.Second
-					}
+				if modlue.ProfileSeconds > 0 {
+					log.Printf("debug profile seconds : %d\n", modlue.ProfileSeconds)
+					profileTimeSeconds = time.Duration(modlue.ProfileSeconds) * time.Second
 				}
 			}
 		}
 	}
+
 	//开始profile
 	return StartProfile(port, cpuprofile, memprofile, blockprofile, traceprofile, profileTimeSeconds)
 }
@@ -345,11 +347,31 @@ func (p *profileMux) ProfileTrace(tracefile string, wg *sync.WaitGroup) {
 }
 
 //加载debug配置
-func LoadDebugProfile(path string) {
-	_, err := toml.DecodeFile(path, &g_rpconfig)
-	if err != nil {
-		log.Println(err.Error())
+// func LoadDebugProfile(path string) {
+// 	_, err := toml.DecodeFile(path, &g_rpconfig)
+// 	if err != nil {
+// 		log.Println(err.Error())
+// 	}
+// }
+
+//加载配置文件
+func LoadConfigFile(file string) error {
+	cfp, _ := filepath.Abs(file)
+	if _, err := os.Stat(cfp); err != nil {
+		return err
 	}
+
+	b, err := ioutil.ReadFile(cfp)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(b, &_setupConfig)
+	if err != nil {
+		return err
+	}
+	_setupConfig.isUsed = true
+	return nil
 }
 
 func DoTrace() func() {
@@ -376,4 +398,10 @@ func bufferedFileWriter(dest string) (w io.Writer, close func()) {
 			log.Fatal(err)
 		}
 	}
+}
+
+func GenerateRangePort(min, max int) int {
+	rand.Seed(time.Now().Unix())
+	randNum := rand.Intn(max-min) + min
+	return randNum
 }
