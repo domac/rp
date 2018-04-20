@@ -1,11 +1,11 @@
 # rp
-runtime profile api
+服务运行时性能profile文件生成工具
 
-简单地对runtime profile生成方式进行封装，主要用于项目的debug
+对标准runtime profile生成方式进行封装，简化Go标准profile工具的使用方式，主要用于项目的debug
 
-生成快照后，可以用pprof工具进行相关性能检测：
+生成快照后，可以用[pprof工具](https://github.com/google/pprof)或命令`go tool pprof`进行相关性能检测：
 
-### 获取方式：
+### 工具使用：
 
 ```
 go get -u -v github.com/domac/rp
@@ -23,7 +23,7 @@ rp.LoadConfigFile("/path/to/config/file")
 rp.DEBUG_PROFILE()
 ```
 
-如使用配置,则根据配置的项目名定义调用的端口,主要用于单台机器上启动多个profile服务的场景
+> 如使用配置文件,则配置文件中的 module_name 为项目名称
 
 配置文件格式:
 
@@ -58,10 +58,10 @@ rp.DEBUG_PROFILE()
 程序运行过程中，调用 rp 的开发api
 
 ```
-curl http://localhost:10029/rp?mode=0
+curl http://localhost:10029/rp?mode=1,4
 ```
 
-刚刚的调用会列出所有的分析文件,若只想生成特定的性能快照,可以参考如下:
+上述的调用会异步生成多个快照文件,若只想生成单个性能快照,可以参考如下:
 
 ```
 生成CPU快照
