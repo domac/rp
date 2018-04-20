@@ -19,7 +19,7 @@ rp.DEBUG_PROFILE()
 使用配置文件
 
 ```
-rp.LoadDebugProfile("/path/to/config/file")
+rp.LoadConfigFile("/path/to/config/file")
 rp.DEBUG_PROFILE()
 ```
 
@@ -28,11 +28,29 @@ rp.DEBUG_PROFILE()
 配置文件格式:
 
 ```
-[debug_profile]
-module_ports = [7000,7001,7002]
-module_names = ["test","ppdemo","domac"]
-profile_output_dir = "../ppdemo/pdata"
-profile_seconds = 25
+{
+    "name": "debug_profile",
+    "modules": [
+        {
+            "module_name": "test",
+            "profile_service_port": 6000,
+            "profile_output_dir": "../ppdemo/pdata",
+            "profile_seconds": 60
+        },
+        {
+            "module_name": "ppdemo",
+            "profile_service_port": 6100,
+            "profile_output_dir": "../ppdemo/pdata/debug",
+            "profile_seconds": 65
+        },
+        {
+            "module_name": "domac",
+            "profile_service_port": 6200,
+            "profile_output_dir": "../ppdemo/pdata",
+            "profile_seconds": 60
+        }
+    ]
+}
 ```
 
 ### 快照文件检测例子：
