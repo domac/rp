@@ -117,6 +117,11 @@ func (p *profileMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-type", "text/html")
 		io.WriteString(w, "profile finish\r\n")
 		return
+	} else if r.URL.Path == "/rp_gonum" {
+		orgNum := runtime.NumGoroutine()
+		w.Header().Set("Content-type", "text/html")
+		io.WriteString(w, fmt.Sprintf("goroutines num: %d \r\n", orgNum))
+		return
 	}
 	http.NotFound(w, r)
 	return
